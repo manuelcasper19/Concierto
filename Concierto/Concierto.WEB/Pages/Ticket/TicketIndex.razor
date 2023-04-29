@@ -1,0 +1,194 @@
+﻿
+@page "/tickets"
+@inject ISnackbar snackbar
+@inject IRepository repository
+@inject NavigationManager navigationManager
+@using Concierto.Shared.Entities
+@using Concierto.Shared.Enums
+
+@if (loading)
+{
+    <div class="spinner">
+        <MudProgressCircular Color="Color.Primary" Style="height:70px;width:70px;" Indeterminate="true" />
+    </div>
+}
+else
+{
+    <MudSnackbarProvider />
+
+      <MudCard>
+        <MudCardActions>
+            
+            <div class="col-md-5">
+                <MudTextField @bind-Value="Filter"
+                          Variant="Variant.Outlined"
+                          Placeholder="Buscar Boleta..."                          
+                          IconSize="Size.Large"
+                          Margin="Margin.Dense"
+                              class="m-1"
+                          >
+                </MudTextField>
+            </div>
+            <div class="col-md-7">
+                <MudButton Variant="Variant.Outlined"
+                       Color="Color.Info"
+                       IconSize="Size.Large"
+                       Size="Size.Large"
+                           class="m-1"
+                       OnClick="@(() => findTicket())"><MudIcon Icon="@Icons.Material.Filled.Search"></MudIcon>
+                 </MudButton>    
+            </div>
+       
+        </MudCardActions>
+        @if(tickets.Id != 0)
+        {
+            <div class="col-md-6">
+                <MudCardContent>
+                    <MudText Typo="Typo.h6">Reserva de Boleta</MudText>
+                    <hr>
+                    <div class="mb-3">
+                        
+                        <MudSelect T="int"
+                           Label="Puerta"
+                           Variant="Variant.Outlined"
+                           Margin="Margin.Dense"
+                           ValueChanged=DoorSelected
+                           Dense="true">                           
+                            
+                            @foreach (EntryDoor status in Enum.GetValues(typeof(EntryDoor)))
+                            {
+                            
+                                   <MudSelectItem Value="@((int)status)">@status</MudSelectItem>                                
+                                
+                            }
+                        </MudSelect>
+                    </div>
+                    <div class="mb-3">
+                        <MudDatePicker Label="Fecha"
+                               @bind-Date="@dateRegister"
+                               Margin="Margin.Dense"
+                               PickerVariant="PickerVariant.Dialog"
+                               Variant="Variant.Outlined" />
+
+                    </div>
+                    <div class="mb-3">
+                        <MudTimePicker Label="Hora"
+                               AmPm="true"
+                               @bind-Time="hourRegister"
+                               Margin="Margin.Dense"
+                               Variant="Variant.Outlined"
+                               PickerVariant="PickerVariant.Dialog" />
+                    </div>
+
+                    <MudSwitch @bind-Checked="@isUsed" Color="Color.Primary" Label="Ocupar" />
+
+
+                </MudCardContent>
+                <MudCardActions class="d-flex align-content-center justify-content-center">
+                    <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.AppRegistration"
+                       OnClick="@(() => Reserve())"
+                       Disabled="@logging">
+                        @if (logging)
+                        {
+                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                            <MudText Class="ms-2">Reservando Boleta...</MudText>
+                        }
+                        else
+                        {
+                            <MudText>Reservar</MudText>
+                        }
+                    </MudButton>
+                </MudCardActions>
+            </div>
+        }
+
+        </MudCard>
+  
+}
+
+@code {
+    private DateTime? dateRegister;
+    private TimeSpan? hourRegister;
+    private bool loading = true;
+    private Tickets tickets = new();
+    private bool logging = false;
+
+    public string Filter { get; set; } = "";
+
+    public bool isUsed { get; set; } = false;
+
+    protected override void OnInitialized()
+    {
+        loading = false;
+    }
+
+    private async Task findTicket()
+    {
+
+        if (string.IsNullOrEmpty(Filter))
+        {
+            snackbar.Add($"Debes ingresar un valor valido", Severity.Error, config => { config.VisibleStateDuration = 3000; });
+            loading = false;
+            return;
+        }
+
+        int ticket = Convert.ToInt32(Filter);
+
+        var httpResponse = await repository.GetAsync<Tickets>($"/api/tickets/{ticket}");
+        if (httpResponse.Error)
+        {
+            var message = await httpResponse.GetErrorMessageAsync();
+
+            snackbar.Add(message, Severity.Error, config => { config.VisibleStateDuration = 5000; });
+            loading = false;
+            return;
+        }
+        loading = false;
+        tickets = httpResponse.Response!;
+        snackbar.Add("Boleta disponible", Severity.Info, config => { config.VisibleStateDuration = 3000; });   
+
+    }
+
+    private async Task Reserve()
+    {
+        if (dateRegister is null || hourRegister is null || !isUsed )
+        {
+            snackbar.Add("Debes seleccionar todos los campos", Severity.Error, config => { config.VisibleStateDuration = 3000; });
+            logging = false;
+            return;
+        }
+        logging = true;
+        tickets.UseDate = dateRegister + hourRegister;
+        tickets.IsUsed = isUsed;
+
+
+        var httpResponse = await repository.PutAsync("/api/tickets", tickets);
+        if (httpResponse.Error)
+        {
+            var message = await httpResponse.GetErrorMessageAsync();
+
+            snackbar.Add(message, Severity.Error, config => { config.VisibleStateDuration = 5000; });
+            logging = false;
+            return;
+        }
+        logging = false;
+        snackbar.Add("Reserva realizada exitosamente", Severity.Success, config => { config.VisibleStateDuration = 4000; });
+        tickets = new Tickets();
+        dateRegister = null;
+        hourRegister = null;
+        isUsed = false;
+        DoorSelected(-1);
+        Filter = "";
+    }
+
+    bool test = false;
+    private void DoorSelected(int SelectedDoorId) 
+    {
+            test = true;
+            tickets.Door = (EntryDoor?)SelectedDoorId;
+       
+        //tickets.Door = (EntryDoor?)SelectedDoorId;
+    }
+}
