@@ -67,21 +67,6 @@ namespace Concierto.API.Controllers
             }
         }
 
-        private async Task<string> validateTicket( int id)
-        {
-            var ticket = await _context.Tickets
-               .FirstOrDefaultAsync(c => c.Id == id);
-            if (ticket == null)
-            {
-                return "Boleta no válida";
-            }
-
-            if (ticket!.IsUsed)
-            {
-                return $"La boleta ya fue usada el {ticket.UseDate} en la puerta {ticket.Door}";
-            }
-            return "";
-        }
 
     }
 }
